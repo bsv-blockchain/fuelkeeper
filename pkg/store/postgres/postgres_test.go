@@ -74,6 +74,17 @@ func TestConformance(t *testing.T) {
 	})
 }
 
+func TestAcquireSkipsDrained(t *testing.T) {
+	dsn := testDSN(t)
+	admin, err := pgxpool.New(context.Background(), dsn)
+	require.NoError(t, err)
+	t.Cleanup(admin.Close)
+
+	storetest.RunAcquireSkipsDrained(t, func(t *testing.T, now func() time.Time) store.Store {
+		return isolatedStore(t, admin, dsn, now)
+	})
+}
+
 // TestSynchronousCommitOffRejected proves New refuses to open a store whose
 // server-side synchronous_commit is off (G1 depends on an acknowledged commit
 // being durable), and that a normal open against the same server still

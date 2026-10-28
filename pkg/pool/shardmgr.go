@@ -501,9 +501,10 @@ func (m *ShardManager) AdoptOnce(ctx context.Context) (bool, error) {
 // watcher still owns).
 //
 // Residual: a shard that reads empty only because rows are still reserved or
-// quarantined (by this or another instance) is not retired, so if more than
-// maxRecentlyEmpty such shards precede every live one, adoption can still
-// cycle over them until those rows are spent or come back. The check's cost
+// quarantined (by this or another instance) is not retired. The SQL stores'
+// AcquireShard skips it; on the other stores, if more than maxRecentlyEmpty
+// such shards precede every live one, adoption can still cycle over them until
+// those rows are spent or come back. The check's cost
 // on an empty adoption is usually a single GetRows page: it stops at the
 // first non-terminal row.
 func (m *ShardManager) retireIfSpentOut(ctx context.Context, sh *store.Shard) bool {

@@ -228,10 +228,14 @@ const retireShardRowSQL = `
 // multi-value IN forcing a scan across every requested status's range (or a
 // separate sort): pinned by explain_test.go. The lease-free predicate uses
 // "<=" (a lease is free at exactly LeaseUntil == now, per store.go's
-// "Owner == \"\" or LeaseUntil <= now" rule).
+// "Owner == \"\" or LeaseUntil <= now" rule). The EXISTS probe
+// (fuel_rows_avail, state 0 = StateAvailable) skips shards with nothing to
+// serve (see store.go, AcquireShard).
 func acquireShardProbeSQL(nExclude int) string {
 	q := `SELECT rowid, created_at, txid FROM fuel_shards
-	       WHERE pool=? AND status=? AND (owner='' OR lease_until IS NULL OR lease_until <= ?)`
+	       WHERE pool=? AND status=? AND (owner='' OR lease_until IS NULL OR lease_until <= ?)
+	         AND EXISTS (SELECT 1 FROM fuel_rows r
+	                      WHERE r.pool = fuel_shards.pool AND r.txid = fuel_shards.txid AND r.state = 0)`
 	if nExclude > 0 {
 		q += ` AND txid NOT IN (` + placeholders(nExclude) + `)`
 	}

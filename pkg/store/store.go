@@ -135,7 +135,10 @@ type Store interface {
 	// whose lease is free (Owner == "" or LeaseUntil <= now), and whose txid is not in
 	// exclude. until must be strictly after now (ErrInvalidArgument otherwise). It sets
 	// Owner = holder, LeaseUntil = until and returns the full record. (nil, nil) means
-	// nothing was adoptable.
+	// nothing was adoptable. The SQL backends (postgres, sqlite) also skip shards
+	// with no available row; the others still return them, and the shard manager's
+	// bounded exclusion list is all that keeps adoption away from drained shards there
+	// (see ShardManager.retireIfSpentOut, "Residual").
 	AcquireShard(ctx context.Context, pool, holder string, now, until time.Time, statuses []ShardStatus, exclude []chainhash.Hash) (*Shard, error)
 	// RenewShard extends the lease if Owner == holder (even if it had expired: only a
 	// successful AcquireShard by another holder, or ReleaseShard, clears Owner) and

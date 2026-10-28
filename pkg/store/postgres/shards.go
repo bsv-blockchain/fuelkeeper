@@ -22,12 +22,21 @@ const shardCols = `pool, txid, size, denomination, lock_mode, status, owner, lea
 // lease-free predicate uses "<=" (a lease is free at exactly LeaseUntil ==
 // now, per store.go's "Owner == "" or LeaseUntil <= now" rule), and NOT
 // (txid = ANY(exclude)) so a caller can skip shards it already knows about.
+// The EXISTS probe (fuel_rows_avail, state 0 = StateAvailable) skips shards
+// with nothing to serve, so drained shards whose rows wait in quarantine
+// cannot pile up ahead of live ones (see store.go, AcquireShard). It is
+// wrapped as a scalar "(SELECT EXISTS ...)" on purpose: a bare EXISTS is
+// pulled up into a semi-join that reads every available row of the pool
+// before touching fuel_shards; the scalar form stays a per-candidate index
+// probe on the shards scan (pinned by explain_test.go).
 const acquireShardSQL = `
 	WITH c AS (
 	  SELECT pool, txid FROM fuel_shards
 	   WHERE pool = $1 AND status = ANY($2::int2[])
 	     AND (owner = '' OR lease_until IS NULL OR lease_until <= $3)
 	     AND NOT (txid = ANY($6::bytea[]))
+	     AND (SELECT EXISTS (SELECT 1 FROM fuel_rows r
+	                          WHERE r.pool = fuel_shards.pool AND r.txid = fuel_shards.txid AND r.state = 0))
 	   ORDER BY created_at, txid
 	   LIMIT 1
 	   FOR UPDATE SKIP LOCKED)
